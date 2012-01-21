@@ -14,7 +14,12 @@
 			<groupId>de.siteof</groupId>
 			<artifactId>cache</artifactId>
 			<version>1.0.0</version>
-			</dependency>
+		</dependency>
+		<dependency>
+			<groupId>de.siteof</groupId>
+			<artifactId>task</artifactId>
+			<version>1.0.0</version>
+		</dependency>
 		<dependency>
 			<groupId>commons-httpclient</groupId>
 			<artifactId>commons-httpclient</artifactId>

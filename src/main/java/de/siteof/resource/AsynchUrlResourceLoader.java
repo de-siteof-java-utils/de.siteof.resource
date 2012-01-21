@@ -15,13 +15,21 @@ public class AsynchUrlResourceLoader extends AbstractResourceLoader {
 		this.cookieManager = cookieManager;
 	}
 
+	protected IResource getUrlResource(String name) throws IOException {
+		return new AsynchUrlResource(name, this.getCookieManager(), this.getTaskManager());
+	}
 
-	public IResource getResource(String name) throws IOException {
+	@Override
+	public final IResource getResource(String name) throws IOException {
 		if (name.indexOf("://") >= 0) {
-			return new AsynchUrlResource(name, cookieManager, this.getTaskManager());
+			return getUrlResource(name);
 		} else {
 			return super.getResource(name);
 		}
+	}
+
+	public ICookieManager getCookieManager() {
+		return cookieManager;
 	}
 
 }
