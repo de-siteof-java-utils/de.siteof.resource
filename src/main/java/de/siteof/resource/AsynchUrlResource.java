@@ -5,9 +5,12 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
+import java.net.HttpCookie;
 import java.net.InetSocketAddress;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -58,7 +61,7 @@ public class AsynchUrlResource extends AbstractResource {
 
 	public static class HttpClientResponseInputStream extends FilterInputStream {
 
-		private HttpMethod method;
+		private final HttpMethod method;
 
 		private static final Log log = LogFactory
 				.getLog(AsynchUrlResource.class);
@@ -68,26 +71,25 @@ public class AsynchUrlResource extends AbstractResource {
 			this.method = method;
 		}
 
+		@Override
 		public int read() throws IOException {
 			int result = super.read();
 			return result;
 		}
 
+		@Override
 		public int read(byte[] buffer, int offset, int count)
 				throws IOException {
 			int result = super.read(buffer, offset, count);
 			return result;
 		}
 
+		@Override
 		public int read(byte[] buffer) throws IOException {
 			return this.read(buffer, 0, buffer.length);
 		}
 
-		/*
-		 * (non-Javadoc)
-		 *
-		 * @see java.io.FilterInputStream#close()
-		 */
+		@Override
 		public void close() throws IOException {
 			try {
 				super.close();
@@ -154,15 +156,13 @@ public class AsynchUrlResource extends AbstractResource {
 			return result;
 		}
 
-		/* (non-Javadoc)
-		 * @see org.apache.http.nio.protocol.HttpRequestExecutionHandler#finalizeContext(org.apache.http.protocol.HttpContext)
-		 */
+		@Override
 		public void finalizeContext(HttpContext context) {
 		}
+		
+		protected abstract void saveSessionCookies(Header[] headers);
 
-		/* (non-Javadoc)
-		 * @see org.apache.http.nio.protocol.HttpRequestExecutionHandler#handleResponse(org.apache.http.HttpResponse, org.apache.http.protocol.HttpContext)
-		 */
+		@Override
 		public void handleResponse(HttpResponse response, HttpContext context)
 				throws IOException {
 			if (responseReceived) {
@@ -172,12 +172,16 @@ public class AsynchUrlResource extends AbstractResource {
 			responseReceived = true;
 			try {
 				int statusCode = response.getStatusLine().getStatusCode();
+				if (log.isDebugEnabled()) {
+					log.debug("received response, status code " + statusCode);
+				}
 				this.onStatusMessage("received response, status code " + statusCode);
 				Header[] headers = response.getAllHeaders();
 
 				if (isSuccessfulStatusCode(statusCode)) {
 					this.onResponseComplete(response);
 				} else if (isRedirectionStatusCode(statusCode)) {
+					saveSessionCookies(headers);
 					String location = null;
 					if (headers != null) {
 						for (Header header: headers) {
@@ -194,6 +198,7 @@ public class AsynchUrlResource extends AbstractResource {
 								if (log.isInfoEnabled()) {
 									log.info("Redirecting to: " + location + "(" + currentUrl + ")");
 								}
+								requestSent = false;
 								redirectTo(location);
 							}
 						} catch (Exception e) {
@@ -210,21 +215,17 @@ public class AsynchUrlResource extends AbstractResource {
 			}
 		}
 
-		/* (non-Javadoc)
-		 * @see org.apache.http.nio.protocol.HttpRequestExecutionHandler#initalizeContext(org.apache.http.protocol.HttpContext, java.lang.Object)
-		 */
+		@Override
 		public void initalizeContext(HttpContext context, Object attachment) {
 			responseReceived = false;
 			requestSent = false;
 		}
 
-		/* (non-Javadoc)
-		 * @see org.apache.http.nio.protocol.HttpRequestExecutionHandler#submitRequest(org.apache.http.protocol.HttpContext)
-		 */
+		@Override
 		public HttpRequest submitRequest(HttpContext context) {
 			if (requestSent) {
 				log.warn("request already sent?");
-				return null;
+//				return null;
 			}
 			requestSent = true;
 			String[] cookies = this.getCookies();
@@ -236,6 +237,9 @@ public class AsynchUrlResource extends AbstractResource {
 				log.debug("URI: " + uri);
 				log.debug("--------------");
 			}
+			if (log.isInfoEnabled()) {
+				log.info("uri=[" + uri + "]");
+			}
 
 			BasicHttpRequest request = new BasicHttpRequest("GET", uri);
 			if (cookies != null) {
@@ -243,33 +247,36 @@ public class AsynchUrlResource extends AbstractResource {
 					request.addHeader("Cookie", cookies[i]);
 				}
 			}
+			request.addHeader("User-Agent", "Mozilla/5.0 (X11; Linux i686; rv:7.0.1) Gecko/20100101 Firefox/7.0.1");
 
 			return request;
 		}
 
 
+		@Override
 		public void cancelled(SessionRequest request) {
 			this.onError("request cancelled");
 		}
 
 
+		@Override
 		public void completed(SessionRequest request) {
 			this.onStatusMessage("request completed");
 		}
 
 
+		@Override
 		public void failed(SessionRequest request) {
 			this.onError("request failed");
 		}
 
 
+		@Override
 		public void timeout(SessionRequest request) {
 			this.onError("request timeout");
 		}
 
-		/* (non-Javadoc)
-		 * @see org.apache.http.nio.protocol.EventListener#connectionClosed(org.apache.http.nio.NHttpConnection)
-		 */
+		@Override
 		public void connectionClosed(NHttpConnection conn) {
 			this.onStatusMessage("connection closed");
 			if (!responseReceived) {
@@ -278,30 +285,22 @@ public class AsynchUrlResource extends AbstractResource {
 			}
 		}
 
-		/* (non-Javadoc)
-		 * @see org.apache.http.nio.protocol.EventListener#connectionOpen(org.apache.http.nio.NHttpConnection)
-		 */
+		@Override
 		public void connectionOpen(NHttpConnection conn) {
 			this.onStatusMessage("connection open");
 		}
 
-		/* (non-Javadoc)
-		 * @see org.apache.http.nio.protocol.EventListener#connectionTimeout(org.apache.http.nio.NHttpConnection)
-		 */
+		@Override
 		public void connectionTimeout(NHttpConnection conn) {
 			this.onStatusMessage("connection timeout");
 		}
 
-		/* (non-Javadoc)
-		 * @see org.apache.http.nio.protocol.EventListener#fatalIOException(java.io.IOException, org.apache.http.nio.NHttpConnection)
-		 */
+		@Override
 		public void fatalIOException(IOException ex, NHttpConnection conn) {
 			this.onStatusMessage("fatalIOException, " + ex);
 		}
 
-		/* (non-Javadoc)
-		 * @see org.apache.http.nio.protocol.EventListener#fatalProtocolException(org.apache.http.HttpException, org.apache.http.nio.NHttpConnection)
-		 */
+		@Override
 		public void fatalProtocolException(HttpException ex,
 				NHttpConnection conn) {
 			this.onStatusMessage("fatalProtocolException, " + ex);
@@ -407,20 +406,24 @@ public class AsynchUrlResource extends AbstractResource {
 			return (HttpRequestExecutionHandler) context.getAttribute(ATTACHMENT_ATTRIBUTE_NAME);
 		}
 
+		@Override
 		public void finalizeContext(HttpContext context) {
 			getHandler(context).finalizeContext(context);
 		}
 
+		@Override
 		public void handleResponse(HttpResponse response, HttpContext context)
 				throws IOException {
 			getHandler(context).handleResponse(response, context);
 		}
 
+		@Override
 		public void initalizeContext(HttpContext context, Object attachment) {
 			context.setAttribute(ATTACHMENT_ATTRIBUTE_NAME, attachment);
 			getHandler(context).initalizeContext(context, attachment);
 		}
 
+		@Override
 		public HttpRequest submitRequest(HttpContext context) {
 			return getHandler(context).submitRequest(context);
 		}
@@ -444,6 +447,7 @@ public class AsynchUrlResource extends AbstractResource {
 			return result;
 		}
 
+		@Override
 		public void connectionOpen(final NHttpConnection connection) {
 			if (log.isDebugEnabled()) {
 				log.debug("Connection open: " + connection);
@@ -454,6 +458,7 @@ public class AsynchUrlResource extends AbstractResource {
 			}
 		}
 
+		@Override
 		public void connectionTimeout(final NHttpConnection connection) {
 			if (log.isDebugEnabled()) {
 				log.debug("Connection timed out: " + connection);
@@ -464,6 +469,7 @@ public class AsynchUrlResource extends AbstractResource {
 			}
 		}
 
+		@Override
 		public void connectionClosed(final NHttpConnection connection) {
 			if (log.isDebugEnabled()) {
 				log.debug("Connection open: " + connection);
@@ -474,6 +480,7 @@ public class AsynchUrlResource extends AbstractResource {
 			}
 		}
 
+		@Override
 		public void fatalIOException(final IOException ex,
 				final NHttpConnection connection) {
 			if (log.isErrorEnabled()) {
@@ -485,6 +492,7 @@ public class AsynchUrlResource extends AbstractResource {
 			}
 		}
 
+		@Override
 		public void fatalProtocolException(final HttpException ex,
 				final NHttpConnection connection) {
 			if (log.isErrorEnabled()) {
@@ -565,6 +573,7 @@ public class AsynchUrlResource extends AbstractResource {
 
 					Thread t = new Thread(new Runnable() {
 
+						@Override
 						public void run() {
 							try {
 								ioReactor.execute(ioEventDispatch);
@@ -600,6 +609,7 @@ public class AsynchUrlResource extends AbstractResource {
 		}
 	}
 
+	@Override
 	public boolean exists() throws IOException {
 		// may need to get re-implemented
 		InputStream in = getResourceAsStream();
@@ -610,6 +620,7 @@ public class AsynchUrlResource extends AbstractResource {
 		return true;
 	}
 
+	@Override
 	public InputStream getResourceAsStream() throws IOException {
 		byte[] data = this.getResourceBytes();
 		InputStream in;
@@ -621,6 +632,7 @@ public class AsynchUrlResource extends AbstractResource {
 		return in;
 	}
 
+	@Override
 	public long getSize() {
 		return 0;
 	}
@@ -668,12 +680,16 @@ public class AsynchUrlResource extends AbstractResource {
 //				}
 //			}});
 		final String name = this.getName();
+		if (log.isDebugEnabled()) {
+			log.debug("name=[" + name + "]");
+		}
 		final IResourceListener<ResourceLoaderEvent<InputStream>> finalListener = listener;
 
 		final AbstractHttpRequestHandler handler = new AbstractHttpRequestHandler() {
 
-			private AtomicBoolean finalEventFired = new AtomicBoolean();
+			private final AtomicBoolean finalEventFired = new AtomicBoolean();
 
+			@Override
 			protected void redirectTo(final String redirectUrl) {
 				final AbstractHttpRequestHandler handler = this;
 				redirectTaskManager.addTask(new AbstractTask() {
@@ -778,12 +794,18 @@ public class AsynchUrlResource extends AbstractResource {
 			@Override
 			protected void onResponseFailed(HttpResponse response, int statusCode) {
 				onError("resource not found(" + statusCode + ")");
+			}
+
+			@Override
+			protected void saveSessionCookies(Header[] headers) {
+				AsynchUrlResource.this.saveSessionCookies(headers);
 			}};
 
 		updateHandlerForUrl(handler, name);
 
 		httpTaskManager.addTask(new AbstractTask() {
 
+			@Override
 			public void execute() throws Exception {
 
 				try {
@@ -807,6 +829,21 @@ public class AsynchUrlResource extends AbstractResource {
 				}
 
 			}});
+	}
+
+	private void saveSessionCookies(Header[] headers) {
+		if ((headers != null) && (this.cookieManager != null)) {
+			List<HttpCookie> allCookies = new LinkedList<HttpCookie>();
+			for (Header header: headers) {
+				if ("Set-Cookie".equals(header.getName())) {
+					List<HttpCookie> cookies = HttpCookie.parse(header.toString());
+					if (cookies != null) {
+						allCookies.addAll(cookies);
+					}
+				}
+			}
+			this.cookieManager.setSessionCookies(allCookies);
+		}
 	}
 
 	/*
@@ -852,12 +889,16 @@ public class AsynchUrlResource extends AbstractResource {
 			final String name)
 			throws IOException {
 
+		if (log.isDebugEnabled()) {
+			log.debug("name=[" + name + "]");
+		}
 		final IResourceListener<ResourceLoaderEvent<byte[]>> finalListener = listener;
 
 		final AbstractHttpRequestHandler handler = new AbstractHttpRequestHandler() {
 
-			private AtomicBoolean finalEventFired = new AtomicBoolean();
+			private final AtomicBoolean finalEventFired = new AtomicBoolean();
 
+			@Override
 			protected void redirectTo(final String redirectUrl) {
 				final AbstractHttpRequestHandler handler = this;
 				redirectTaskManager.addTask(new AbstractTask() {
@@ -927,12 +968,18 @@ public class AsynchUrlResource extends AbstractResource {
 			@Override
 			protected void onResponseFailed(HttpResponse response, int statusCode) {
 				onError("resource not found(" + statusCode + ")");
+			}
+
+			@Override
+			protected void saveSessionCookies(Header[] headers) {
+				AsynchUrlResource.this.saveSessionCookies(headers);
 			}};
 
 		updateHandlerForUrl(handler, name);
 
 		httpTaskManager.addTask(new AbstractTask() {
 
+			@Override
 			public void execute() throws Exception {
 
 				try {
@@ -941,8 +988,14 @@ public class AsynchUrlResource extends AbstractResource {
 					notifyStatusMessage(finalListener, "starting...");
 
 					if (sessionRequest != null) {
+						if (log.isDebugEnabled()) {
+							log.debug("cancelling previous session request");
+						}
 						sessionRequest.cancel();
 						sessionRequest = null;
+					}
+					if (log.isDebugEnabled()) {
+						log.debug("connecting, name=[" + name + "]");
 					}
 					sessionRequest = ioReactor.connect(
 							new InetSocketAddress(handler.getHostname(), handler.getPort()),
@@ -969,6 +1022,7 @@ public class AsynchUrlResource extends AbstractResource {
 				new ObjectHolder<ResourceLoaderEvent<byte[]>>();
 			final CountDownLatch requestCount = new CountDownLatch(1);
 			this.getResourceBytes(new IResourceListener<ResourceLoaderEvent<byte[]>>() {
+				@Override
 				public void onResourceEvent(ResourceLoaderEvent<byte[]> event) {
 					result.setObject(event);
 					if ((event.isComplete()) || (event.isFailed())) {

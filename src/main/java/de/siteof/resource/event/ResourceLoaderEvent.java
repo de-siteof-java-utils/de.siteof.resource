@@ -6,6 +6,8 @@ import de.siteof.resource.IResource;
 
 public class ResourceLoaderEvent<T> extends EventObject {
 
+	private static final long serialVersionUID = 1L;
+	
 	private final T result;
 	private final boolean complete;
 
