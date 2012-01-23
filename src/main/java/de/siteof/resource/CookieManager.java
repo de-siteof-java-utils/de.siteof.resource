@@ -52,10 +52,10 @@ public class CookieManager implements ICookieManager {
 		}
 	}
 
-	private static class UrlInfo {		
+	private static class UrlInfo {
 		private final String domainName;
 		private final String path;
-		
+
 		public UrlInfo(String domainName, String path) {
 			this.domainName = domainName;
 			this.path = path;
@@ -69,12 +69,12 @@ public class CookieManager implements ICookieManager {
 			return path;
 		}
 	}
-	
+
 	private static class CookieKey {
 	    private final String name;        // NAME= ... "$Name" style is reserved
 	    private final String domain;      // Domain=VALUE ... domain that sees cookie
 	    private final String path;        // Path=VALUE ... URLs that see the cookie
-		
+
 		public CookieKey(HttpCookie cookie) {
 			this.name = cookie.getName();
 			this.domain = cookie.getDomain();
@@ -158,6 +158,10 @@ public class CookieManager implements ICookieManager {
 				if (pathSeparator >= 0) {
 					domainName = name.substring(domainNameIndex, pathSeparator);
 					path = name.substring(pathSeparator);
+					int portSeparator = domainName.indexOf(':');
+					if (portSeparator >= 0) {
+						domainName = domainName.substring(0, portSeparator);
+					}
 				} else {
 					domainName = name.substring(domainNameIndex);
 					path = "/";
@@ -167,7 +171,7 @@ public class CookieManager implements ICookieManager {
 		}
 		return result;
 	}
-	
+
 	private Collection<HttpCookie> getSessionCookies(String domainName, String path) {
 		Map<String, HttpCookie> map = new HashMap<String, HttpCookie>();
 		synchronized (sessionCookieMap) {
@@ -243,25 +247,28 @@ public class CookieManager implements ICookieManager {
 					}
 				}
 			}
-			
-			// use the original domain name / path
-			Collection<HttpCookie> sessionCookies = getSessionCookies(
-					urlInfo.getDomainName(),
-					urlInfo.getPath());
-			if (sessionCookies.isEmpty()) {
-				// TODO session cookies are currently not correctly overriding permanent cookies
-				String[] sessionCookieStrings = new String[sessionCookies.size()];
-				int index = 0;
-				for (HttpCookie cookie: sessionCookies) {
-					sessionCookieStrings[index++] = cookie.toString();
-				}
-				if ((result != null) && (result.length > 0)) {
-					result = Arrays.copyOf(result, result.length + sessionCookieStrings.length);
-					System.arraycopy(sessionCookieStrings, 0, result,
-							result.length - sessionCookieStrings.length, sessionCookieStrings.length);
-				}
+		}
+
+		// use the original domain name / path
+		Collection<HttpCookie> sessionCookies = getSessionCookies(
+				urlInfo.getDomainName(),
+				urlInfo.getPath());
+		if (!sessionCookies.isEmpty()) {
+			// TODO session cookies are currently not correctly overriding permanent cookies
+			String[] sessionCookieStrings = new String[sessionCookies.size()];
+			int index = 0;
+			for (HttpCookie cookie: sessionCookies) {
+				sessionCookieStrings[index++] = cookie.toString();
+			}
+			if ((result != null) && (result.length > 0)) {
+				result = Arrays.copyOf(result, result.length + sessionCookieStrings.length);
+				System.arraycopy(sessionCookieStrings, 0, result,
+						result.length - sessionCookieStrings.length, sessionCookieStrings.length);
+			} else {
+				result = sessionCookieStrings;
 			}
 		}
+
 		if (result == null) {
 			result = EMPTY_STRING_ARRAY;
 		}
