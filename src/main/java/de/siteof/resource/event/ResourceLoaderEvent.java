@@ -4,10 +4,10 @@ import java.util.EventObject;
 
 import de.siteof.resource.IResource;
 
-public class ResourceLoaderEvent<T> extends EventObject {
+public class ResourceLoaderEvent<T> extends EventObject implements Cloneable {
 
 	private static final long serialVersionUID = 1L;
-	
+
 	private final T result;
 	private final boolean complete;
 
@@ -35,9 +35,27 @@ public class ResourceLoaderEvent<T> extends EventObject {
 		this(resource, null, false, null, statusMessage);
 	}
 
-	/* (non-Javadoc)
-	 * @see java.util.EventObject#toString()
-	 */
+	@SuppressWarnings("unchecked")
+	@Override
+	public ResourceLoaderEvent<T> clone() {
+		try {
+			return (ResourceLoaderEvent<T>) super.clone();
+		} catch (CloneNotSupportedException e) {
+			throw new RuntimeException("clone failed", e);
+		}
+	}
+
+	public ResourceLoaderEvent<T> cloneFor(IResource resource) {
+		ResourceLoaderEvent<T> event = this.clone();
+		event.source = resource;
+		return event;
+	}
+
+	public <TR> ResourceLoaderEvent<TR> cloneFor(IResource resource, TR result) {
+		return new ResourceLoaderEvent<TR>(resource, result,
+				this.complete, this.cause, this.statusMessage);
+	}
+
 	@Override
 	public String toString() {
 		return this.getClass().getName() + ", complete=[" + complete +

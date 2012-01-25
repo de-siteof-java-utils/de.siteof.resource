@@ -24,60 +24,75 @@ public class ResourceProxy extends AbstractResource implements IResource {
 		return resource;
 	}
 
+	@Override
 	public void clearCache() {
 		resource.clearCache();
 	}
 
+	@Override
 	public boolean exists() throws IOException {
 		return resource.exists();
 	}
 
+	@Override
 	public IResourceContext getContext() {
 		return resource.getContext();
 	}
 
+	@Override
 	public String getName() {
 		return resource.getName();
 	}
 
+	@Override
 	public InputStream getResourceAsStream() throws IOException {
 		return resource.getResourceAsStream();
 	}
 
+	@Override
 	public byte[] getResourceBytes() throws IOException {
 		return resource.getResourceBytes();
 	}
 
+	@Override
 	public long getLastCached() {
 		return resource.getLastCached();
 	}
 
+	@Override
 	public long getLastModified() {
 		return resource.getLastModified();
 	}
 
+	@Override
 	public int getModifier() {
 		return resource.getModifier();
 	}
 
+	@Override
 	public long getSize() {
 		return resource.getSize();
 	}
 
+	@Override
 	public void abort() {
 		resource.abort();
 	}
 
+	@Override
 	public void getResourceAsStream(
-			IResourceListener<ResourceLoaderEvent<InputStream>> listener)
+			IResourceListener<ResourceLoaderEvent<InputStream>> listener,
+			ResourceRequestParameters parameters)
 			throws IOException {
-		super.getResourceAsStream(listener);
+		super.getResourceAsStream(listener, parameters);
 	}
 
+	@Override
 	public void getResourceBytes(
-			IResourceListener<ResourceLoaderEvent<byte[]>> listener)
+			IResourceListener<ResourceLoaderEvent<byte[]>> listener,
+			ResourceRequestParameters parameters)
 			throws IOException {
-		super.getResourceBytes(listener);
+		super.getResourceBytes(listener, parameters);
 	}
 
 }

@@ -27,17 +27,12 @@ public class AlternativeResourceProxy extends ResourceProxy {
 		reset();
 	}
 
-
 	private void reset() {
 		currentAlternativeResource = super.getResource();
 		failedResourceNames = null;
 	}
 
-
-	/*
-	 * (non-Javadoc)
-	 * @see de.siteof.webpicturebrowser.loader.ResourceProxy#clearCache()
-	 */
+	@Override
 	public void clearCache() {
 		reset();
 		super.getResource().clearCache();
@@ -112,11 +107,7 @@ public class AlternativeResourceProxy extends ResourceProxy {
 		return currentAlternativeResource;
 	}
 
-
-	/*
-	 * (non-Javadoc)
-	 * @see de.siteof.webpicturebrowser.loader.ResourceProxy#exists()
-	 */
+	@Override
 	public boolean exists() throws IOException {
 		boolean result = false;
 		IResource currentResource = this.getCurrentAlternativeResource();
@@ -154,11 +145,7 @@ public class AlternativeResourceProxy extends ResourceProxy {
 		return result;
 	}
 
-
-	/*
-	 * (non-Javadoc)
-	 * @see de.siteof.webpicturebrowser.loader.ResourceProxy#getResourceAsStream()
-	 */
+	@Override
 	public InputStream getResourceAsStream() throws IOException {
 		InputStream result = null;
 		IResource currentResource = this.getCurrentAlternativeResource();
@@ -201,6 +188,7 @@ public class AlternativeResourceProxy extends ResourceProxy {
 	 * (non-Javadoc)
 	 * @see de.siteof.webpicturebrowser.loader.ResourceProxy#getResourceBytes()
 	 */
+	@Override
 	public byte[] getResourceBytes() throws IOException {
 		byte[] result = null;
 		IResource currentResource = this.getCurrentAlternativeResource();
@@ -251,46 +239,42 @@ public class AlternativeResourceProxy extends ResourceProxy {
 		}
 	}
 
-
-	/* (non-Javadoc)
-	 * @see de.siteof.webpicturebrowser.loader.ResourceProxy#getResourceAsStream(de.siteof.webpicturebrowser.loader.event.IResourceListener)
-	 */
 	@Override
 	public void getResourceAsStream(
-			IResourceListener<ResourceLoaderEvent<InputStream>> listener)
+			IResourceListener<ResourceLoaderEvent<InputStream>> listener,
+			ResourceRequestParameters parameters)
 			throws IOException {
 		IResource currentAlternativeResource = this.getCurrentAlternativeResource();
 		if (currentAlternativeResource == null) {
 			this.reset();
 			currentAlternativeResource = this.getCurrentAlternativeResource();
 		}
-		getResourceAsStream(listener, currentAlternativeResource, 0, null);
+		getResourceAsStream(listener, parameters, currentAlternativeResource, 0, null);
 	}
 
-
-	/* (non-Javadoc)
-	 * @see de.siteof.webpicturebrowser.loader.ResourceProxy#getResourceBytes(de.siteof.webpicturebrowser.loader.event.IResourceListener)
-	 */
 	@Override
 	public void getResourceBytes(
-			IResourceListener<ResourceLoaderEvent<byte[]>> listener)
+			IResourceListener<ResourceLoaderEvent<byte[]>> listener,
+			ResourceRequestParameters parameters)
 			throws IOException {
 		IResource currentAlternativeResource = this.getCurrentAlternativeResource();
 		if (currentAlternativeResource == null) {
 			this.reset();
 			currentAlternativeResource = this.getCurrentAlternativeResource();
 		}
-		getResourceBytes(listener, currentAlternativeResource, 0, null);
+		getResourceBytes(listener, parameters, currentAlternativeResource, 0, null);
 	}
 
 	private void getResourceAsStream(
 			IResourceListener<ResourceLoaderEvent<InputStream>> listener,
+			final ResourceRequestParameters parameters,
 			final IResource currentResource,
 			final int tryCount,
 			final Throwable firstCause)
 			throws IOException {
 		final IResourceListener<ResourceLoaderEvent<InputStream>> finalListener = listener;
 		currentResource.getResourceAsStream(new IResourceListener<ResourceLoaderEvent<InputStream>>() {
+			@Override
 			public void onResourceEvent(
 					ResourceLoaderEvent<InputStream> event) {
 				if (event.isComplete()) {
@@ -324,7 +308,7 @@ public class AlternativeResourceProxy extends ResourceProxy {
 					}
 					if (alternativeResource != null) {
 						try {
-							getResourceAsStream(finalListener, alternativeResource, tryCount + 1, event.getCause());
+							getResourceAsStream(finalListener, parameters, alternativeResource, tryCount + 1, event.getCause());
 						} catch (Throwable e) {
 							log.warn("Failed to retrieve next alternative resource bytes due to " + e, e);
 							finalListener.onResourceEvent(new ResourceLoaderEvent<InputStream>(
@@ -338,17 +322,19 @@ public class AlternativeResourceProxy extends ResourceProxy {
 					finalListener.onResourceEvent(new ResourceLoaderEvent<InputStream>(
 							AlternativeResourceProxy.this, event.getStatusMessage()));
 				}
-			}});
+			}}, parameters);
 	}
 
 	private void getResourceBytes(
 			IResourceListener<ResourceLoaderEvent<byte[]>> listener,
+			final ResourceRequestParameters parameters,
 			final IResource currentResource,
 			final int tryCount,
 			final Throwable firstCause)
 			throws IOException {
 		final IResourceListener<ResourceLoaderEvent<byte[]>> finalListener = listener;
 		currentResource.getResourceBytes(new IResourceListener<ResourceLoaderEvent<byte[]>>() {
+			@Override
 			public void onResourceEvent(
 					ResourceLoaderEvent<byte[]> event) {
 				if (event.isComplete()) {
@@ -382,7 +368,7 @@ public class AlternativeResourceProxy extends ResourceProxy {
 					}
 					if (alternativeResource != null) {
 						try {
-							getResourceBytes(finalListener, alternativeResource, tryCount + 1, event.getCause());
+							getResourceBytes(finalListener, parameters, alternativeResource, tryCount + 1, event.getCause());
 						} catch (Throwable e) {
 							log.warn("Failed to retrieve next alternative resource bytes due to " + e, e);
 							finalListener.onResourceEvent(new ResourceLoaderEvent<byte[]>(
@@ -396,7 +382,7 @@ public class AlternativeResourceProxy extends ResourceProxy {
 					finalListener.onResourceEvent(new ResourceLoaderEvent<byte[]>(
 							AlternativeResourceProxy.this, event.getStatusMessage()));
 				}
-			}});
+			}}, parameters);
 	}
 
 }

@@ -24,4 +24,9 @@ public class MetaResourceLoaderEvent<T> extends ResourceLoaderEvent<T> {
 		return metaData;
 	}
 
+	@Override
+	public <TR> MetaResourceLoaderEvent<TR> cloneFor(IResource resource, TR result) {
+		return new MetaResourceLoaderEvent<TR>(resource, this.metaData);
+	}
+
 }

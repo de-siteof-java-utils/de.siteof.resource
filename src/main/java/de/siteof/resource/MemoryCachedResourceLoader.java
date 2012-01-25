@@ -21,6 +21,7 @@ public class MemoryCachedResourceLoader extends AbstractResourceLoader {
 			super(resource);
 		}
 
+		@Override
 		public void clearCache() {
 			cached	= false;
 			exists	= false;
@@ -29,6 +30,7 @@ public class MemoryCachedResourceLoader extends AbstractResourceLoader {
 			setModifier(getModifier() & (~MODIFIER_LOADED));
 		}
 
+		@Override
 		public boolean exists() throws IOException {
 			if (cached) {
 				return (exists) || (data != null);
@@ -39,6 +41,7 @@ public class MemoryCachedResourceLoader extends AbstractResourceLoader {
 			return (data != null);
 		}
 
+		@Override
 		public InputStream getResourceAsStream() throws IOException {
 			byte[] data	= this.getResourceBytes();
 			if (data != null) {
@@ -47,6 +50,7 @@ public class MemoryCachedResourceLoader extends AbstractResourceLoader {
 			return null;
 		}
 
+		@Override
 		public byte[] getResourceBytes() throws IOException {
 			byte[] data	= this.data;
 			if (data == null) {
@@ -60,6 +64,7 @@ public class MemoryCachedResourceLoader extends AbstractResourceLoader {
 			return data;
 		}
 
+		@Override
 		public long getSize() {
 			long result	= 0;
 			try {
@@ -72,68 +77,72 @@ public class MemoryCachedResourceLoader extends AbstractResourceLoader {
 			return result;
 		}
 
-		/* (non-Javadoc)
-		 * @see de.siteof.webpicturebrowser.loader.AbstractResource#getResourceAsStream(de.siteof.webpicturebrowser.loader.event.IResourceListener)
-		 */
 		@Override
 		public void getResourceAsStream(
-				IResourceListener<ResourceLoaderEvent<InputStream>> listener)
+				IResourceListener<ResourceLoaderEvent<InputStream>> listener,
+				ResourceRequestParameters parameters)
 				throws IOException {
-			final IResourceListener<ResourceLoaderEvent<InputStream>> finalListener = listener;
-			byte[] data	= this.data;
-			if (data != null) {
-				ResourceLoaderEvent<InputStream> event = new ResourceLoaderEvent<InputStream>(
-						this, new ByteArrayInputStream(data), true);
-				listener.onResourceEvent(event);
+			if (parameters.isNoChache()) {
+				this.getParentResource().getResourceAsStream(listener, parameters);
 			} else {
-				this.getParentResource().getResourceBytes(new IResourceListener<ResourceLoaderEvent<byte[]>>() {
-					public void onResourceEvent(
-							ResourceLoaderEvent<byte[]> event) {
-						if (event.isComplete()) {
-							MemoryCachedResource.this.data = event.getResult();
-							finalListener.onResourceEvent(new ResourceLoaderEvent<InputStream>(
-									MemoryCachedResource.this, new ByteArrayInputStream(MemoryCachedResource.this.data), true));
-						} else if (event.isFailed()) {
-							finalListener.onResourceEvent(new ResourceLoaderEvent<InputStream>(
-									MemoryCachedResource.this, event.getCause()));
-						}
-					}});
+				final IResourceListener<ResourceLoaderEvent<InputStream>> finalListener = listener;
+				byte[] data	= this.data;
+				if (data != null) {
+					ResourceLoaderEvent<InputStream> event = new ResourceLoaderEvent<InputStream>(
+							this, new ByteArrayInputStream(data), true);
+					listener.onResourceEvent(event);
+				} else {
+					this.getParentResource().getResourceBytes(new IResourceListener<ResourceLoaderEvent<byte[]>>() {
+						@Override
+						public void onResourceEvent(
+								ResourceLoaderEvent<byte[]> event) {
+							if (event.isComplete()) {
+								MemoryCachedResource.this.data = event.getResult();
+								finalListener.onResourceEvent(new ResourceLoaderEvent<InputStream>(
+										MemoryCachedResource.this, new ByteArrayInputStream(MemoryCachedResource.this.data), true));
+							} else if (event.isFailed()) {
+								finalListener.onResourceEvent(new ResourceLoaderEvent<InputStream>(
+										MemoryCachedResource.this, event.getCause()));
+							}
+						}});
+				}
 			}
-//			super.getResourceAsStream(listener);
 		}
 
-		/* (non-Javadoc)
-		 * @see de.siteof.webpicturebrowser.loader.AbstractResource#getResourceBytes(de.siteof.webpicturebrowser.loader.event.IResourceListener)
-		 */
 		@Override
 		public void getResourceBytes(
-				IResourceListener<ResourceLoaderEvent<byte[]>> listener)
+				IResourceListener<ResourceLoaderEvent<byte[]>> listener,
+				ResourceRequestParameters parameters)
 				throws IOException {
-			final IResourceListener<ResourceLoaderEvent<byte[]>> finalListener = listener;
-			byte[] data	= this.data;
-			if (data != null) {
-				ResourceLoaderEvent<byte[]> event = new ResourceLoaderEvent<byte[]>(
-						this, data, true);
-				listener.onResourceEvent(event);
+			if (parameters.isNoChache()) {
+				this.getParentResource().getResourceBytes(listener, parameters);
 			} else {
-				this.getParentResource().getResourceBytes(new IResourceListener<ResourceLoaderEvent<byte[]>>() {
-					public void onResourceEvent(
-							ResourceLoaderEvent<byte[]> event) {
-						if (event.isComplete()) {
-							MemoryCachedResource.this.data = event.getResult();
-						} else if (event.isFailed()) {
-						}
-						finalListener.onResourceEvent(event);
-					}});
+				final IResourceListener<ResourceLoaderEvent<byte[]>> finalListener = listener;
+				byte[] data	= this.data;
+				if (data != null) {
+					ResourceLoaderEvent<byte[]> event = new ResourceLoaderEvent<byte[]>(
+							this, data, true);
+					listener.onResourceEvent(event);
+				} else {
+					this.getParentResource().getResourceBytes(new IResourceListener<ResourceLoaderEvent<byte[]>>() {
+						@Override
+						public void onResourceEvent(
+								ResourceLoaderEvent<byte[]> event) {
+							if (event.isComplete()) {
+								MemoryCachedResource.this.data = event.getResult();
+							} else if (event.isFailed()) {
+							}
+							finalListener.onResourceEvent(event);
+						}});
+				}
 			}
-//			super.getResourceBytes(listener);
 		}
 
 	}
 
 
-	private IResourceLoader parentResourceLoader;
-	private IObjectCache<String, IResource>	resourceCache	= ObjectCacheFactory.getNewSoftObjectCache();
+	private final IResourceLoader parentResourceLoader;
+	private final IObjectCache<String, IResource>	resourceCache	= ObjectCacheFactory.getNewSoftObjectCache();
 
 	public MemoryCachedResourceLoader(IResourceLoader parentResourceLoader) {
 		super(parentResourceLoader);
@@ -141,6 +150,7 @@ public class MemoryCachedResourceLoader extends AbstractResourceLoader {
 	}
 
 
+	@Override
 	public IResource getResource(String name) throws IOException {
 		IResource resource	= (IResource) resourceCache.get(name);
 		if (resource == null) {

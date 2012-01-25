@@ -36,9 +36,15 @@ public interface IResource {
 
 	void getResourceBytes(IResourceListener<ResourceLoaderEvent<byte[]>> listener) throws IOException;
 
+	void getResourceBytes(IResourceListener<ResourceLoaderEvent<byte[]>> listener,
+			ResourceRequestParameters parameters) throws IOException;
+
 	InputStream getResourceAsStream() throws IOException;
 
 	void getResourceAsStream(IResourceListener<ResourceLoaderEvent<InputStream>> listener) throws IOException;
+
+	void getResourceAsStream(IResourceListener<ResourceLoaderEvent<InputStream>> listener,
+			ResourceRequestParameters parameters) throws IOException;
 
 
 	/**

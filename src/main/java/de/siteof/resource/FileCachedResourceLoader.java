@@ -86,6 +86,7 @@ public class FileCachedResourceLoader extends AbstractResourceLoader {
 				return comparator;
 			}
 
+			@Override
 			public int compare(FileInfo fileInfo1, FileInfo fileInfo2) {
 				long diff	= fileInfo1.getTimestamp() - fileInfo2.getTimestamp();
 				if (diff < 0) {
@@ -99,9 +100,9 @@ public class FileCachedResourceLoader extends AbstractResourceLoader {
 
 		}
 
-		private String cacheDirectory;
-		private long maxTotalSize;
-		private int maxFileCount;
+		private final String cacheDirectory;
+		private final long maxTotalSize;
+		private final int maxFileCount;
 //		private SortedSet fileInfoSet;
 		private LinkedList<FileInfo> fileInfoList;
 		private Map<String, FileInfo> fileInfoByNameMap;
@@ -124,6 +125,7 @@ public class FileCachedResourceLoader extends AbstractResourceLoader {
 			}
 		}
 
+		@Override
 		public void triggerBeforeWrite(Object key, long size) {
 			synchronized (this) {
 				String thisCacheFileName	= (String) key;
@@ -181,6 +183,7 @@ public class FileCachedResourceLoader extends AbstractResourceLoader {
 			}
 		}
 
+		@Override
 		public void triggerAfterWrite(Object key, long size) {
 			synchronized (this) {
 				String thisCacheFileName	= (String) key;
@@ -197,12 +200,13 @@ public class FileCachedResourceLoader extends AbstractResourceLoader {
 
 	private static class FileCacheContext implements IFileCacheContext {
 
-		private ICacheGarbageCollector cacheGarbageCollector;
+		private final ICacheGarbageCollector cacheGarbageCollector;
 
 		public FileCacheContext(ICacheGarbageCollector cacheGarbageCollector) {
 			this.cacheGarbageCollector	= cacheGarbageCollector;
 		}
 
+		@Override
 		public ICacheGarbageCollector getCacheGarbageCollector() {
 			return cacheGarbageCollector;
 		}
@@ -214,8 +218,8 @@ public class FileCachedResourceLoader extends AbstractResourceLoader {
 
 		private boolean cached;
 		private boolean exists;
-		private File cacheFile;
-		private IFileCacheContext cacheContext;
+		private final File cacheFile;
+		private final IFileCacheContext cacheContext;
 
 		private static final Log log	= LogFactory.getLog(FileCachedResourceLoader.class);
 
@@ -233,6 +237,7 @@ public class FileCachedResourceLoader extends AbstractResourceLoader {
 			return this.cacheFile;
 		}
 
+		@Override
 		public void clearCache() {
 			cached	= false;
 			exists	= false;
@@ -241,6 +246,7 @@ public class FileCachedResourceLoader extends AbstractResourceLoader {
 			getCacheFile().delete();
 		}
 
+		@Override
 		public boolean exists() throws IOException {
 			if (cached) {
 				return (exists);
@@ -251,6 +257,7 @@ public class FileCachedResourceLoader extends AbstractResourceLoader {
 			return (exists);
 		}
 
+		@Override
 		public InputStream getResourceAsStream() throws IOException {
 			File cacheFile	= this.getCacheFile();
 			if (cacheFile.exists()) {
@@ -285,6 +292,7 @@ public class FileCachedResourceLoader extends AbstractResourceLoader {
 			}
 		}
 
+		@Override
 		public byte[] getResourceBytes() throws IOException {
 			byte[] result	= null;
 			File cacheFile	= this.getCacheFile();
@@ -305,121 +313,123 @@ public class FileCachedResourceLoader extends AbstractResourceLoader {
 			return result;
 		}
 
-		/* (non-Javadoc)
-		 * @see de.siteof.webpicturebrowser.loader.AbstractResource#getResourceAsStream(de.siteof.webpicturebrowser.loader.event.IResourceListener)
-		 */
 		@Override
 		public void getResourceAsStream(
-				IResourceListener<ResourceLoaderEvent<InputStream>> listener)
+				IResourceListener<ResourceLoaderEvent<InputStream>> listener,
+				ResourceRequestParameters parameters)
 				throws IOException {
-			final IResourceListener<ResourceLoaderEvent<InputStream>> finalListener = listener;
-			File cacheFile	= this.getCacheFile();
-			if (cacheFile.exists()) {
-				InputStream in	= new FileInputStream(cacheFile);
-				try {
-					byte[] data	= IOUtil.readAllFromStream(in);
-					ResourceLoaderEvent<InputStream> event = new ResourceLoaderEvent<InputStream>(
-							this, new ByteArrayInputStream(data), true);
-					listener.onResourceEvent(event);
-				} finally {
-					in.close();
-				}
-//				this.getTaskManager().addTask(new AbstractTask() {
-//					public void execute() throws Exception {
-//						ResourceLoaderEvent<InputStream> event;
-//						try {
-//							event = new ResourceLoaderEvent<InputStream>(
-//									FileCachedResource.this, getResourceAsStream(), true);
-//						} catch (Throwable e) {
-//							event = new ResourceLoaderEvent<InputStream>(
-//									FileCachedResource.this, e);
-//						}
-//						finalListener.onResourceEvent(event);
-//					}});
+			if (parameters.isNoChache()) {
+				this.getParentResource().getResourceAsStream(listener, parameters);
 			} else {
-				this.getParentResource().getResourceBytes(new IResourceListener<ResourceLoaderEvent<byte[]>>() {
-					public void onResourceEvent(
-							ResourceLoaderEvent<byte[]> event) {
-						if (event.isComplete()) {
-							byte[] data	= event.getResult();
-							updateCache(data);
-							finalListener.onResourceEvent(new ResourceLoaderEvent<InputStream>(
-									FileCachedResource.this, new ByteArrayInputStream(data), true));
-						} else if (event.isFailed()) {
-							finalListener.onResourceEvent(new ResourceLoaderEvent<InputStream>(
-									FileCachedResource.this, event.getCause()));
-						}
-					}});
+				final IResourceListener<ResourceLoaderEvent<InputStream>> finalListener = listener;
+				File cacheFile	= this.getCacheFile();
+				if (cacheFile.exists()) {
+					InputStream in	= new FileInputStream(cacheFile);
+					try {
+						byte[] data	= IOUtil.readAllFromStream(in);
+						ResourceLoaderEvent<InputStream> event = new ResourceLoaderEvent<InputStream>(
+								this, new ByteArrayInputStream(data), true);
+						listener.onResourceEvent(event);
+					} finally {
+						in.close();
+					}
+	//				this.getTaskManager().addTask(new AbstractTask() {
+	//					public void execute() throws Exception {
+	//						ResourceLoaderEvent<InputStream> event;
+	//						try {
+	//							event = new ResourceLoaderEvent<InputStream>(
+	//									FileCachedResource.this, getResourceAsStream(), true);
+	//						} catch (Throwable e) {
+	//							event = new ResourceLoaderEvent<InputStream>(
+	//									FileCachedResource.this, e);
+	//						}
+	//						finalListener.onResourceEvent(event);
+	//					}});
+				} else {
+					this.getParentResource().getResourceBytes(new IResourceListener<ResourceLoaderEvent<byte[]>>() {
+						@Override
+						public void onResourceEvent(
+								ResourceLoaderEvent<byte[]> event) {
+							if (event.isComplete()) {
+								// TODO this doesn't handle chunks
+								byte[] data	= event.getResult();
+								updateCache(data);
+								finalListener.onResourceEvent(new ResourceLoaderEvent<InputStream>(
+										FileCachedResource.this, new ByteArrayInputStream(data), true));
+							} else if (event.isFailed()) {
+								finalListener.onResourceEvent(new ResourceLoaderEvent<InputStream>(
+										FileCachedResource.this, event.getCause()));
+							}
+						}}, parameters);
+				}
 			}
-//			super.getResourceAsStream(listener);
 		}
 
-		/* (non-Javadoc)
-		 * @see de.siteof.webpicturebrowser.loader.AbstractResource#getResourceBytes(de.siteof.webpicturebrowser.loader.event.IResourceListener)
-		 */
 		@Override
 		public void getResourceBytes(
-				IResourceListener<ResourceLoaderEvent<byte[]>> listener)
+				IResourceListener<ResourceLoaderEvent<byte[]>> listener,
+				ResourceRequestParameters parameters)
 				throws IOException {
-			final IResourceListener<ResourceLoaderEvent<byte[]>> finalListener = listener;
-			File cacheFile	= this.getCacheFile();
-			if (cacheFile.exists()) {
-				InputStream in	= new FileInputStream(cacheFile);
-				try {
-					byte[] data	= IOUtil.readAllFromStream(in);
-					ResourceLoaderEvent<byte[]> event = new ResourceLoaderEvent<byte[]>(
-							this, data, true);
-					listener.onResourceEvent(event);
-				} finally {
-					in.close();
-				}
-//				this.getTaskManager().addTask(new AbstractTask() {
-//					public void execute() throws Exception {
-//						ResourceLoaderEvent<InputStream> event;
-//						try {
-//							event = new ResourceLoaderEvent<InputStream>(
-//									FileCachedResource.this, getResourceAsStream(), true);
-//						} catch (Throwable e) {
-//							event = new ResourceLoaderEvent<InputStream>(
-//									FileCachedResource.this, e);
-//						}
-//						finalListener.onResourceEvent(event);
-//					}});
+			if (parameters.isNoChache()) {
+				this.getParentResource().getResourceBytes(listener, parameters);
 			} else {
-				this.getParentResource().getResourceBytes(new IResourceListener<ResourceLoaderEvent<byte[]>>() {
-					public void onResourceEvent(
-							ResourceLoaderEvent<byte[]> event) {
-						if (event.isComplete()) {
-							byte[] data	= event.getResult();
-							updateCache(data);
-							finalListener.onResourceEvent(new ResourceLoaderEvent<byte[]>(
-									FileCachedResource.this, data, true));
-						} else if (event.isFailed()) {
-							finalListener.onResourceEvent(new ResourceLoaderEvent<byte[]>(
-									FileCachedResource.this, event.getCause()));
-						}
-					}});
+				final IResourceListener<ResourceLoaderEvent<byte[]>> finalListener = listener;
+				File cacheFile	= this.getCacheFile();
+				if (cacheFile.exists()) {
+					InputStream in	= new FileInputStream(cacheFile);
+					try {
+						byte[] data	= IOUtil.readAllFromStream(in);
+						ResourceLoaderEvent<byte[]> event = new ResourceLoaderEvent<byte[]>(
+								this, data, true);
+						listener.onResourceEvent(event);
+					} finally {
+						in.close();
+					}
+	//				this.getTaskManager().addTask(new AbstractTask() {
+	//					public void execute() throws Exception {
+	//						ResourceLoaderEvent<InputStream> event;
+	//						try {
+	//							event = new ResourceLoaderEvent<InputStream>(
+	//									FileCachedResource.this, getResourceAsStream(), true);
+	//						} catch (Throwable e) {
+	//							event = new ResourceLoaderEvent<InputStream>(
+	//									FileCachedResource.this, e);
+	//						}
+	//						finalListener.onResourceEvent(event);
+	//					}});
+				} else {
+					this.getParentResource().getResourceBytes(new IResourceListener<ResourceLoaderEvent<byte[]>>() {
+						@Override
+						public void onResourceEvent(
+								ResourceLoaderEvent<byte[]> event) {
+							if (event.isComplete()) {
+								byte[] data	= event.getResult();
+								updateCache(data);
+							}
+							finalListener.onResourceEvent(event.cloneFor(FileCachedResource.this));
+						}}, parameters);
+				}
+	//			final IResourceListener<ResourceLoaderEvent<byte[]>> finalListener = listener;
+	//			byte[] data	= this.data;
+	//			if (data != null) {
+	//				ResourceLoaderEvent<byte[]> event = new ResourceLoaderEvent<byte[]>(
+	//						this, data, true);
+	//				listener.onResourceEvent(event);
+	//			} else {
+	//				this.getParentResource().getResourceBytes(new IResourceListener<ResourceLoaderEvent<byte[]>>() {
+	//					public void onResourceEvent(
+	//							ResourceLoaderEvent<byte[]> event) {
+	//						if (event.isComplete()) {
+	//							MemoryCachedResource.this.data = event.getResult();
+	//						} else if (event.isFailed()) {
+	//						}
+	//						finalListener.onResourceEvent(event);
+	//					}});
+	//			}
 			}
-//			final IResourceListener<ResourceLoaderEvent<byte[]>> finalListener = listener;
-//			byte[] data	= this.data;
-//			if (data != null) {
-//				ResourceLoaderEvent<byte[]> event = new ResourceLoaderEvent<byte[]>(
-//						this, data, true);
-//				listener.onResourceEvent(event);
-//			} else {
-//				this.getParentResource().getResourceBytes(new IResourceListener<ResourceLoaderEvent<byte[]>>() {
-//					public void onResourceEvent(
-//							ResourceLoaderEvent<byte[]> event) {
-//						if (event.isComplete()) {
-//							MemoryCachedResource.this.data = event.getResult();
-//						} else if (event.isFailed()) {
-//						}
-//						finalListener.onResourceEvent(event);
-//					}});
-//			}
-//			super.getResourceBytes(listener);
 		}
 
+		@Override
 		public long getSize() {
 			long result	= 0;
 			try {
@@ -440,11 +450,11 @@ public class FileCachedResourceLoader extends AbstractResourceLoader {
 	private static final Log log	= LogFactory.getLog(FileCachedResourceLoader.class);
 
 
-	private IResourceLoader parentResourceLoader;
-	private IObjectCache<String, IResource>	resourceCache	= new ObjectCache<String, IResource>();
-	private String cacheDirectory;
-	private ICacheGarbageCollector cacheGarbageCollector;
-	private IFileCacheContext cacheContext;
+	private final IResourceLoader parentResourceLoader;
+	private final IObjectCache<String, IResource>	resourceCache	= new ObjectCache<String, IResource>();
+	private final String cacheDirectory;
+	private final ICacheGarbageCollector cacheGarbageCollector;
+	private final IFileCacheContext cacheContext;
 
 	public FileCachedResourceLoader(IResourceLoader parentResourceLoader, String cacheDirectory, long maxTotalSize, int maxFileCount,
 			ITaskManager taskManager) {
@@ -469,6 +479,7 @@ public class FileCachedResourceLoader extends AbstractResourceLoader {
 	}
 
 
+	@Override
 	public IResource getResource(String name) throws IOException {
 		if ((name.indexOf("://") < 0) || (name.startsWith("file://"))) {
 			return parentResourceLoader.getResource(name);

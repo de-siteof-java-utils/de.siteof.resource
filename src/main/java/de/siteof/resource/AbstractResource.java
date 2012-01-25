@@ -72,6 +72,7 @@ public abstract class AbstractResource implements IResource {
 	 * (non-Javadoc)
 	 * @see de.siteof.webpicturebrowser.loader.IResource#clearCache()
 	 */
+	@Override
 	public void clearCache() {
 		if (resource != null) {
 			resource.clearCache();
@@ -83,6 +84,7 @@ public abstract class AbstractResource implements IResource {
 	 * (non-Javadoc)
 	 * @see de.siteof.webpicturebrowser.loader.IResource#exists()
 	 */
+	@Override
 	public boolean exists() throws IOException {
 		if (resource != null) {
 			return resource.exists();
@@ -95,6 +97,7 @@ public abstract class AbstractResource implements IResource {
 	 * (non-Javadoc)
 	 * @see de.siteof.webpicturebrowser.loader.IResource#getContext()
 	 */
+	@Override
 	public IResourceContext getContext() {
 		if (resource != null) {
 			return resource.getContext();
@@ -107,6 +110,7 @@ public abstract class AbstractResource implements IResource {
 	 * (non-Javadoc)
 	 * @see de.siteof.webpicturebrowser.loader.IResource#getLastCached()
 	 */
+	@Override
 	public long getLastCached() {
 		if (resource != null) {
 			return resource.getLastCached();
@@ -119,6 +123,7 @@ public abstract class AbstractResource implements IResource {
 	 * (non-Javadoc)
 	 * @see de.siteof.webpicturebrowser.loader.IResource#getLastModified()
 	 */
+	@Override
 	public long getLastModified() {
 		if (resource != null) {
 			return resource.getLastModified();
@@ -131,6 +136,7 @@ public abstract class AbstractResource implements IResource {
 	 * (non-Javadoc)
 	 * @see de.siteof.webpicturebrowser.loader.IResource#getName()
 	 */
+	@Override
 	public String getName() {
 		if (name != null) {
 			return name;
@@ -146,6 +152,7 @@ public abstract class AbstractResource implements IResource {
 	 * (non-Javadoc)
 	 * @see de.siteof.webpicturebrowser.loader.IResource#getResourceBytes()
 	 */
+	@Override
 	public byte[] getResourceBytes() throws IOException {
 		if (resource != null) {
 			return resource.getResourceBytes();
@@ -192,6 +199,7 @@ public abstract class AbstractResource implements IResource {
 	 * (non-Javadoc)
 	 * @see de.siteof.webpicturebrowser.loader.IResource#getModifier()
 	 */
+	@Override
 	public int getModifier() {
 		if (resource != null) {
 			return resource.getModifier() | modifier;
@@ -202,6 +210,7 @@ public abstract class AbstractResource implements IResource {
 	/* (non-Javadoc)
 	 * @see de.siteof.webpicturebrowser.loader.IResource#abort()
 	 */
+	@Override
 	public void abort() {
 		if (resource != null) {
 			resource.abort();
@@ -216,14 +225,22 @@ public abstract class AbstractResource implements IResource {
 				message));
 	}
 
+	@Override
+	public final void getResourceAsStream(
+			IResourceListener<ResourceLoaderEvent<InputStream>> listener) throws IOException {
+		this.getResourceAsStream(listener, new ResourceRequestParameters());
+	}
 
+	@Override
 	public void getResourceAsStream(
-			IResourceListener<ResourceLoaderEvent<InputStream>> listener)
+			IResourceListener<ResourceLoaderEvent<InputStream>> listener,
+			ResourceRequestParameters parameters)
 			throws IOException {
 		log.warn("default asynchronous getResourceAsStream implementation, class=[" +
 				this.getClass().getName() + "], name=[" + this.getName() + "]");
 		final IResourceListener<ResourceLoaderEvent<InputStream>> finalListener = listener;
 		taskManager.addTask(new AbstractTask() {
+			@Override
 			public void execute() throws Exception {
 				ResourceLoaderEvent<InputStream> event;
 				try {
@@ -237,13 +254,22 @@ public abstract class AbstractResource implements IResource {
 			}});
 	}
 
+	@Override
+	public final void getResourceBytes(
+			IResourceListener<ResourceLoaderEvent<byte[]>> listener) throws IOException {
+		this.getResourceBytes(listener, new ResourceRequestParameters());
+	}
+
+	@Override
 	public void getResourceBytes(
-			IResourceListener<ResourceLoaderEvent<byte[]>> listener)
+			IResourceListener<ResourceLoaderEvent<byte[]>> listener,
+			ResourceRequestParameters parameters)
 			throws IOException {
 		log.warn("default asynchronous getResourceBytes implementation, class=[" +
 				this.getClass().getName() + "], name=[" + this.getName() + "]");
 		final IResourceListener<ResourceLoaderEvent<byte[]>> finalListener = listener;
 		taskManager.addTask(new AbstractTask() {
+			@Override
 			public void execute() throws Exception {
 				ResourceLoaderEvent<byte[]> event;
 				try {
@@ -260,6 +286,7 @@ public abstract class AbstractResource implements IResource {
 	/* (non-Javadoc)
 	 * @see de.siteof.webpicturebrowser.loader.IResource#getTaskManager()
 	 */
+	@Override
 	public ITaskManager getTaskManager() {
 		return taskManager;
 	}

@@ -29,6 +29,7 @@ public class ResourceDownloader {
 	private int minimumSize = 3 * 1024;
 	private final int inspectHeaderLength = 1024;
 	private final boolean ignoreHtmlResponse = true;
+	private final ResourceRequestParameters requestParameters;
 	private File downloadDirectory;
 	private OutputStream outputStream;
 	private String filename;
@@ -38,6 +39,8 @@ public class ResourceDownloader {
 	public ResourceDownloader(IResourceLoader resourceLoader, String mediaUrl) {
 		this.resourceLoader = resourceLoader;
 		this.mediaUrl = mediaUrl;
+		requestParameters = new ResourceRequestParameters();
+		requestParameters.setNoChache(true);
 	}
 
 	public String getResourceName() {
@@ -333,7 +336,7 @@ public class ResourceDownloader {
 		synchronized (lock) {
 			downloading.set(true);
 		}
-		resource.getResourceBytes(callbackListenerHolder.getObject());
+		resource.getResourceBytes(callbackListenerHolder.getObject(), this.requestParameters);
 	}
 
 	private void notifyDownloadEnd(boolean status) {
