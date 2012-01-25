@@ -13,7 +13,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import de.siteof.resource.event.IResourceListener;
-import de.siteof.resource.event.NameResourceLoaderEvent;
+import de.siteof.resource.event.MetaResourceLoaderEvent;
 import de.siteof.resource.event.ResourceLoaderEvent;
 import de.siteof.resource.util.ObjectHolder;
 
@@ -234,8 +234,8 @@ public class ResourceDownloader {
 					if (log.isDebugEnabled()) {
 						log.debug("event=" + event);
 					}
-					if (event instanceof NameResourceLoaderEvent) {
-						filename = ((NameResourceLoaderEvent<?>) event).getName();
+					if (event instanceof MetaResourceLoaderEvent) {
+						filename = ((MetaResourceLoaderEvent<?>) event).getMetaData().getName();
 					} else if (event.isComplete()) {
 						byte[] data = event.getResult();
 						if (!bufferWritten.get()) {
