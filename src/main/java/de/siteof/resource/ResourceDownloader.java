@@ -5,6 +5,9 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -23,7 +26,7 @@ public class ResourceDownloader {
 
 	private final IResourceLoader resourceLoader;
 	private final String mediaUrl;
-	private final Object lock = new Object();
+	private final CountDownLatch lock = new CountDownLatch(1);
 	private final AtomicBoolean downloading = new AtomicBoolean();
 	private final AtomicBoolean downloadResult = new AtomicBoolean();
 	private int minimumSize = 3 * 1024;
@@ -32,9 +35,21 @@ public class ResourceDownloader {
 	private final ResourceRequestParameters requestParameters;
 	private File downloadDirectory;
 	private OutputStream outputStream;
+	private String title;
 	private String filename;
+	private String contentType;
 	private File targetFile;
 	private File tempFile;
+
+	private static final Map<String, String> mimeExtensionMap;
+
+	static {
+		// TODO use utility / complete map
+		mimeExtensionMap = new HashMap<String, String>();
+		mimeExtensionMap.put("video/mp4", "mp4");
+		mimeExtensionMap.put("video/mpeg", "mpg");
+		mimeExtensionMap.put("video/x-flv", "flv");
+	}
 
 	public ResourceDownloader(IResourceLoader resourceLoader, String mediaUrl) {
 		this.resourceLoader = resourceLoader;
@@ -45,6 +60,17 @@ public class ResourceDownloader {
 
 	public String getResourceName() {
 		String result = filename;
+		if ((result == null) && (this.title != null) && (this.title.length() > 0)) {
+			result = this.title;
+			if (this.contentType != null) {
+				String extension = mimeExtensionMap.get(contentType);
+				if (extension == null) {
+					log.warn("no extension mapped for contentType=[" + this.contentType + "]");
+				} else {
+					result = result + "." + extension;
+				}
+			}
+		}
 		if (result == null) {
 			result = this.mediaUrl;
 			int index = result.lastIndexOf('/');
@@ -238,7 +264,9 @@ public class ResourceDownloader {
 						log.debug("event=" + event);
 					}
 					if (event instanceof MetaResourceLoaderEvent) {
-						filename = ((MetaResourceLoaderEvent<?>) event).getMetaData().getName();
+						IResourceMetaData metaData = ((MetaResourceLoaderEvent<?>) event).getMetaData();
+						filename = metaData.getName();
+						contentType = metaData.getContentType();
 					} else if (event.isComplete()) {
 						byte[] data = event.getResult();
 						if (!bufferWritten.get()) {
@@ -333,9 +361,7 @@ public class ResourceDownloader {
 					}
 				}
 			}});
-		synchronized (lock) {
-			downloading.set(true);
-		}
+		downloading.set(true);
 		resource.getResourceBytes(callbackListenerHolder.getObject(), this.requestParameters);
 	}
 
@@ -343,18 +369,24 @@ public class ResourceDownloader {
 		if (status) {
 			onComplete();
 		}
-		synchronized (lock) {
-			downloadResult.set(status);
-			downloading.set(false);
-			lock.notify();
-		}
+		downloadResult.set(status);
+		downloading.set(false);
+		lock.countDown();
+//		synchronized (lock) {
+//			downloadResult.set(status);
+//			downloading.set(false);
+//			lock.notify();
+//		}
 	}
 
 	public boolean waitForDownload() throws InterruptedException {
-		synchronized (lock) {
-			if (downloading.get())
-			lock.wait();
+		if (downloading.get()) {
+			lock.await();
 		}
+//		synchronized (lock) {
+//			if (downloading.get())
+//			lock.wait();
+//		}
 		return downloadResult.get();
 	}
 
@@ -388,6 +420,22 @@ public class ResourceDownloader {
 
 	public void setDownloadDirectory(File downloadDirectory) {
 		this.downloadDirectory = downloadDirectory;
+	}
+
+	public String getTitle() {
+		return title;
+	}
+
+	public void setTitle(String title) {
+		this.title = title;
+	}
+
+	public String getContentType() {
+		return contentType;
+	}
+
+	public void setContentType(String contentType) {
+		this.contentType = contentType;
 	}
 
 }

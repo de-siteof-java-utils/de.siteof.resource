@@ -3,6 +3,7 @@ package de.siteof.resource.test;
 import java.io.IOException;
 
 import de.siteof.resource.IResourceLoader;
+import de.siteof.resource.util.test.ResourceLoaderTester;
 
 public abstract class AbstractResourceLoaderTest {
 

@@ -321,6 +321,9 @@ public class AlternativeResourceProxy extends ResourceProxy {
 				} else if (event.hasStatusMessage()) {
 					finalListener.onResourceEvent(new ResourceLoaderEvent<InputStream>(
 							AlternativeResourceProxy.this, event.getStatusMessage()));
+				} else {
+					finalListener.onResourceEvent(event.cloneFor(
+							AlternativeResourceProxy.this, (InputStream) null));
 				}
 			}}, parameters);
 	}
