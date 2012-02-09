@@ -4,8 +4,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 public class IOUtil {
 
+	private static final Log log = LogFactory.getLog(IOUtil.class);
 
 	public static byte[] readAllFromStream(InputStream in) throws IOException {
 		ByteArrayOutputStream out	= new ByteArrayOutputStream(in.available());
@@ -20,5 +24,17 @@ public class IOUtil {
 		return out.toByteArray();
 	}
 
+	public static boolean close(InputStream in) {
+		boolean result = false;
+		if (in != null) {
+			try {
+				in.close();
+				result = true;
+			} catch (IOException e) {
+				log.warn("close failed due to " + e, e);
+			}
+		}
+		return result;
+	}
 
 }
