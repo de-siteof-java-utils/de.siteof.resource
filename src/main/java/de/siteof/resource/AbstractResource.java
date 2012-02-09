@@ -2,6 +2,7 @@ package de.siteof.resource;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -15,13 +16,12 @@ import de.siteof.task.SynchronousTaskManager;
 
 public abstract class AbstractResource implements IResource {
 
+	private static final Log log = LogFactory.getLog(AbstractResource.class);
+
 	private final ITaskManager taskManager;
 	private final IResource resource;
 	private final String name;
 	private int modifier;
-
-	private static final Log log	= LogFactory.getLog(AbstractResource.class);
-
 
 	public AbstractResource(String name) {
 		this(null, name, null);
@@ -67,11 +67,6 @@ public abstract class AbstractResource implements IResource {
 		this.modifier	= modifier;
 	}
 
-
-	/*
-	 * (non-Javadoc)
-	 * @see de.siteof.webpicturebrowser.loader.IResource#clearCache()
-	 */
 	@Override
 	public void clearCache() {
 		if (resource != null) {
@@ -79,11 +74,6 @@ public abstract class AbstractResource implements IResource {
 		}
 	}
 
-
-	/*
-	 * (non-Javadoc)
-	 * @see de.siteof.webpicturebrowser.loader.IResource#exists()
-	 */
 	@Override
 	public boolean exists() throws IOException {
 		if (resource != null) {
@@ -92,11 +82,6 @@ public abstract class AbstractResource implements IResource {
 		return false;
 	}
 
-
-	/*
-	 * (non-Javadoc)
-	 * @see de.siteof.webpicturebrowser.loader.IResource#getContext()
-	 */
 	@Override
 	public IResourceContext getContext() {
 		if (resource != null) {
@@ -105,11 +90,6 @@ public abstract class AbstractResource implements IResource {
 		return null;
 	}
 
-
-	/*
-	 * (non-Javadoc)
-	 * @see de.siteof.webpicturebrowser.loader.IResource#getLastCached()
-	 */
 	@Override
 	public long getLastCached() {
 		if (resource != null) {
@@ -118,11 +98,6 @@ public abstract class AbstractResource implements IResource {
 		return 0;
 	}
 
-
-	/*
-	 * (non-Javadoc)
-	 * @see de.siteof.webpicturebrowser.loader.IResource#getLastModified()
-	 */
 	@Override
 	public long getLastModified() {
 		if (resource != null) {
@@ -131,11 +106,6 @@ public abstract class AbstractResource implements IResource {
 		return 0;
 	}
 
-
-	/*
-	 * (non-Javadoc)
-	 * @see de.siteof.webpicturebrowser.loader.IResource#getName()
-	 */
 	@Override
 	public String getName() {
 		if (name != null) {
@@ -147,11 +117,6 @@ public abstract class AbstractResource implements IResource {
 		return null;
 	}
 
-
-	/*
-	 * (non-Javadoc)
-	 * @see de.siteof.webpicturebrowser.loader.IResource#getResourceBytes()
-	 */
 	@Override
 	public byte[] getResourceBytes() throws IOException {
 		if (resource != null) {
@@ -194,11 +159,6 @@ public abstract class AbstractResource implements IResource {
 		}
 	}
 
-
-	/*
-	 * (non-Javadoc)
-	 * @see de.siteof.webpicturebrowser.loader.IResource#getModifier()
-	 */
 	@Override
 	public int getModifier() {
 		if (resource != null) {
@@ -207,9 +167,6 @@ public abstract class AbstractResource implements IResource {
 		return modifier;
 	}
 
-	/* (non-Javadoc)
-	 * @see de.siteof.webpicturebrowser.loader.IResource#abort()
-	 */
 	@Override
 	public void abort() {
 		if (resource != null) {
@@ -262,30 +219,44 @@ public abstract class AbstractResource implements IResource {
 
 	@Override
 	public void getResourceBytes(
-			IResourceListener<ResourceLoaderEvent<byte[]>> listener,
+			final IResourceListener<ResourceLoaderEvent<byte[]>> listener,
 			ResourceRequestParameters parameters)
 			throws IOException {
 		log.warn("default asynchronous getResourceBytes implementation, class=[" +
 				this.getClass().getName() + "], name=[" + this.getName() + "]");
-		final IResourceListener<ResourceLoaderEvent<byte[]>> finalListener = listener;
 		taskManager.addTask(new AbstractTask() {
 			@Override
 			public void execute() throws Exception {
-				ResourceLoaderEvent<byte[]> event;
+				InputStream in = null;
 				try {
-					event = new ResourceLoaderEvent<byte[]>(
-							AbstractResource.this, getResourceBytes(), true);
+					in = AbstractResource.this.getResourceAsStream();
+					byte[] buffer = new byte[4096];
+					while (true) {
+						int bytesRead = in.read(buffer);
+						if (bytesRead < 0) {
+							break;
+						} else if (bytesRead > 0) {
+							byte[] chunk = Arrays.copyOf(buffer, bytesRead);
+							ResourceLoaderEvent<byte[]> event = new ResourceLoaderEvent<byte[]>(
+									AbstractResource.this, chunk, false);
+							listener.onResourceEvent(event);
+						}
+					}
+					// complete event
+					ResourceLoaderEvent<byte[]> event = new ResourceLoaderEvent<byte[]>(
+							AbstractResource.this, new byte[0], true);
+					listener.onResourceEvent(event);
 				} catch (Throwable e) {
-					event = new ResourceLoaderEvent<byte[]>(
+					// failed event
+					ResourceLoaderEvent<byte[]> event = new ResourceLoaderEvent<byte[]>(
 							AbstractResource.this, e);
+					listener.onResourceEvent(event);
+				} finally {
+					IOUtil.close(in);
 				}
-				finalListener.onResourceEvent(event);
 			}});
 	}
 
-	/* (non-Javadoc)
-	 * @see de.siteof.webpicturebrowser.loader.IResource#getTaskManager()
-	 */
 	@Override
 	public ITaskManager getTaskManager() {
 		return taskManager;
