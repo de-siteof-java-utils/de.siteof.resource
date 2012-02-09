@@ -196,6 +196,8 @@ public class ResourceLoaderTester {
 						} catch (IOException e) {
 							log.error("failed", e);
 						}
+					} else {
+						downloadResult.set(true);
 					}
 					lock.countDown();
 				} else if (event.isFailed()) {
@@ -300,7 +302,7 @@ public class ResourceLoaderTester {
 	}
 
 	public void test(String name) throws IOException {
-		TestResource testResource = new TestResource(name, this.getBinaryData(1000));
+		TestResource testResource = new TestResource(name, this.getBinaryData(1024 * 1024));
 		this.test(name, testResource);
 	}
 
