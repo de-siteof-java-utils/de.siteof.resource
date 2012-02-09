@@ -329,20 +329,21 @@ public class AlternativeResourceProxy extends ResourceProxy {
 	}
 
 	private void getResourceBytes(
-			IResourceListener<ResourceLoaderEvent<byte[]>> listener,
+			final IResourceListener<ResourceLoaderEvent<byte[]>> listener,
 			final ResourceRequestParameters parameters,
 			final IResource currentResource,
 			final int tryCount,
 			final Throwable firstCause)
 			throws IOException {
-		final IResourceListener<ResourceLoaderEvent<byte[]>> finalListener = listener;
 		currentResource.getResourceBytes(new IResourceListener<ResourceLoaderEvent<byte[]>>() {
+			private boolean chunkSent;
+
 			@Override
 			public void onResourceEvent(
 					ResourceLoaderEvent<byte[]> event) {
 				if (event.isComplete()) {
 					byte[] data	= event.getResult();
-					finalListener.onResourceEvent(new ResourceLoaderEvent<byte[]>(
+					listener.onResourceEvent(new ResourceLoaderEvent<byte[]>(
 							AlternativeResourceProxy.this, data, true));
 				} else if (event.isFailed()) {
 					final int maxTryCount = getMaxTryCount();
@@ -353,7 +354,7 @@ public class AlternativeResourceProxy extends ResourceProxy {
 					} else {
 						firstOrCurrentCause = event.getCause();
 					}
-					if (tryCount < maxTryCount) {
+					if ((tryCount < maxTryCount) && (!chunkSent)) {
 						String failedName = currentResource.getName();
 						try {
 							alternativeResource = AlternativeResourceProxy.this.getNextAlternativeResource();
@@ -364,26 +365,33 @@ public class AlternativeResourceProxy extends ResourceProxy {
 							if (log.isDebugEnabled()) {
 								log.debug("Failed to get resource stream (" + failedName + "), will try " + currentResource.getName());
 							}
-							notifyStatusMessage(finalListener, "trying " + currentResource.getName());
+							notifyStatusMessage(listener, "trying " + currentResource.getName());
 						} else {
 							log.warn("Failed to get resource stream (" + failedName + "), no more alternatives available (" + firstOrCurrentCause + ")");
 						}
 					}
 					if (alternativeResource != null) {
 						try {
-							getResourceBytes(finalListener, parameters, alternativeResource, tryCount + 1, event.getCause());
+							getResourceBytes(listener, parameters, alternativeResource, tryCount + 1, event.getCause());
 						} catch (Throwable e) {
 							log.warn("Failed to retrieve next alternative resource bytes due to " + e, e);
-							finalListener.onResourceEvent(new ResourceLoaderEvent<byte[]>(
+							listener.onResourceEvent(new ResourceLoaderEvent<byte[]>(
 									AlternativeResourceProxy.this, firstOrCurrentCause));
 						}
 					} else {
-						finalListener.onResourceEvent(new ResourceLoaderEvent<byte[]>(
+						listener.onResourceEvent(new ResourceLoaderEvent<byte[]>(
 								AlternativeResourceProxy.this, firstOrCurrentCause));
 					}
 				} else if (event.hasStatusMessage()) {
-					finalListener.onResourceEvent(new ResourceLoaderEvent<byte[]>(
+					listener.onResourceEvent(new ResourceLoaderEvent<byte[]>(
 							AlternativeResourceProxy.this, event.getStatusMessage()));
+				} else {
+					byte[] data = event.getResult();
+					if ((data != null) && (data.length > 0)) {
+						// chunk
+						listener.onResourceEvent(event.cloneFor(AlternativeResourceProxy.this));
+						chunkSent = true;
+					}
 				}
 			}}, parameters);
 	}
