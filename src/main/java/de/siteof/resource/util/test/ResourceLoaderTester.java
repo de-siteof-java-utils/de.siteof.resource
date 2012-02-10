@@ -4,8 +4,13 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -99,6 +104,33 @@ public class ResourceLoaderTester {
 		parent = new TestResourceLoader(null, null);
 	}
 
+	protected IResourceLoader createResourceLoader(IResourceLoader parent) {
+		throw new UnsupportedOperationException("createResourceLoader not implemented");
+	}
+
+	public List<ResourceLoaderTestParameter> allTests() {
+		List<ResourceLoaderTestParameter> result = new LinkedList<ResourceLoaderTestParameter>();
+		Method[] methods = ResourceLoaderTester.class.getDeclaredMethods();
+		for (Method method: methods) {
+			String name = method.getName();
+			if ((name.startsWith("test")) && (name.length() > 4)) {
+				result.add(new ResourceLoaderTestParameter(name));
+			}
+		}
+		if (result.isEmpty()) {
+			throw new IllegalStateException("no tests found");
+		}
+		return result;
+	}
+
+	public List<Object[]> allTestsArrays() {
+		List<ResourceLoaderTestParameter> tests = this.allTests();
+		List<Object[]> result = new ArrayList<Object[]>(tests.size());
+		for (ResourceLoaderTestParameter test: tests) {
+			result.add(new Object[] {test});
+		}
+		return result;
+	}
 
 	protected byte[] getBinaryData(int length) {
 		byte[] data = new byte[length];
@@ -304,6 +336,42 @@ public class ResourceLoaderTester {
 	public void test(String name) throws IOException {
 		TestResource testResource = new TestResource(name, this.getBinaryData(1024 * 1024));
 		this.test(name, testResource);
+	}
+
+	public void test(ResourceLoaderTestParameter test, String name) throws IOException {
+//		if (this.resourceLoader == null) {
+		this.resourceLoader = this.createResourceLoader(parent);
+//		}
+		TestResource testResource = new TestResource(name, this.getBinaryData(1024 * 1024));
+		try {
+			Method method = ResourceLoaderTester.class.getDeclaredMethod(test.getTestName(), new Class<?>[] {
+				String.class, TestResource.class
+			});
+			method.invoke(this, new Object[] {name, testResource});
+		} catch (RuntimeException e) {
+			throw e;
+		} catch (InvocationTargetException e) {
+			Throwable cause = e.getCause();
+			if (cause instanceof RuntimeException) {
+				throw (RuntimeException) cause;
+			} else if (cause instanceof IOException) {
+				throw (IOException) cause;
+			} else if (cause instanceof Error) {
+				throw (Error) cause;
+			} else {
+				throw new IOException("unexpected exception - " + cause, cause);
+			}
+		} catch (Exception e) {
+			throw new IllegalStateException("unexpected exception - " + e, e);
+		}
+	}
+
+	public void test(ResourceLoaderTestParameter test) throws IOException {
+		this.test(test, "dummy");
+	}
+
+	protected String getDefaultResourceName() {
+		return "dummy";
 	}
 
 	public IResourceLoader getParent() {

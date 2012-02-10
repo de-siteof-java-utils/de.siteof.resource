@@ -1,22 +1,42 @@
 package de.siteof.resource.test;
 
 import java.io.IOException;
+import java.util.Collection;
 
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized.Parameters;
 
 import de.siteof.resource.AlternativeResourceLoader;
 import de.siteof.resource.IResourceLoader;
+import de.siteof.resource.util.test.ResourceLoaderTestParameter;
+import de.siteof.resource.util.test.ResourceLoaderTester;
+import de.siteof.test.LabelledParameterized;
 
-public class AlternativeResourceLoaderTest extends AbstractResourceLoaderTest {
+@RunWith(LabelledParameterized.class)
+public class AlternativeResourceLoaderTest {
 
-	@Override
-	protected IResourceLoader createResourceLoader(IResourceLoader parent) {
-		return new AlternativeResourceLoader(parent);
+	private static ResourceLoaderTester tester = new ResourceLoaderTester() {
+		@Override
+		protected IResourceLoader createResourceLoader(IResourceLoader parent) {
+			return new AlternativeResourceLoader(parent);
+		}
+	};
+
+	private final ResourceLoaderTestParameter test;
+
+	public AlternativeResourceLoaderTest(ResourceLoaderTestParameter test) {
+		this.test = test;
 	}
+
+	@Parameters
+    public static Collection<Object[]> getTests() {
+    	return tester.allTestsArrays();
+    }
 
 	@Test
 	public void test() throws IOException {
-		this.doTest("http://dummy/");
+		tester.test(test, "http://dummy/");
 	}
 
 }
