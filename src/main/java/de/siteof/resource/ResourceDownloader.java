@@ -222,7 +222,9 @@ public class ResourceDownloader {
 					log.error("failed to save media - " + e + " (tryIndex=" + tryIndex + ")", e);
 					closeOutputStream(out);
 				} finally {
-					closeOutputStream(out);
+					if (complete) {
+						closeOutputStream(out);
+					}
 				}
 				return result;
 			}
