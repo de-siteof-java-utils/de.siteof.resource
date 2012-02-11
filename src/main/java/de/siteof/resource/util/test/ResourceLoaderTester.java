@@ -1,6 +1,5 @@
 package de.siteof.resource.util.test;
 
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -9,12 +8,14 @@ import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import junit.framework.Assert;
@@ -30,32 +31,150 @@ import de.siteof.resource.ResourceRequestParameters;
 import de.siteof.resource.event.IResourceListener;
 import de.siteof.resource.event.MetaResourceLoaderEvent;
 import de.siteof.resource.event.ResourceLoaderEvent;
-import de.siteof.resource.util.IOUtil;
 import de.siteof.task.ITaskManager;
 
 public class ResourceLoaderTester {
 
+	private interface ReadCallback {
+		void read(long position);
+	}
+
+	private class ChunkedInputStream extends InputStream {
+
+		private final Iterator<?> chunks;
+		private Object currentChunk;
+		private int currentIndex;
+		private final AtomicLong position = new AtomicLong();
+
+		protected ChunkedInputStream(Iterator<?> chunks) {
+			this.chunks = chunks;
+		}
+
+		private int doRead(boolean block) throws IOException {
+			int result = -1;
+			while ((result == -1) && ((this.currentChunk != null) || (this.chunks.hasNext()))) {
+				if (this.currentChunk == null) {
+					this.currentChunk = this.chunks.next();
+					this.currentIndex = 0;
+				}
+				if (this.currentChunk instanceof byte[]) {
+					byte[] data = (byte[]) this.currentChunk;
+					if (this.currentIndex >= data.length) {
+						this.currentChunk = null;
+					} else {
+						result = data[this.currentIndex++] & 0xFF;
+						position.incrementAndGet();
+					}
+				} else if (this.currentChunk instanceof IOException) {
+					IOException e = (IOException) this.currentChunk;
+					this.currentChunk = null;
+					throw e;
+				} else if (this.currentChunk instanceof ReadCallback) {
+					if (!block) {
+						// block next time
+						return result;
+					}
+					ReadCallback callback = (ReadCallback) this.currentChunk;
+					this.currentChunk = null;
+					callback.read(position.get());
+				} else if (this.currentChunk instanceof Runnable) {
+					if (!block) {
+						// block next time
+						return result;
+					}
+					Runnable runnable = (Runnable) this.currentChunk;
+					runnable.run();
+				} else if (this.currentChunk instanceof CountDownLatch) {
+					CountDownLatch lock = (CountDownLatch) this.currentChunk;
+					this.currentChunk = null;
+					lock.countDown();
+					try {
+						lock.await();
+					} catch (InterruptedException e) {
+						throw new IOException("await interrupted", e);
+					}
+				} else {
+					throw new IOException("unknown chunk - " + this.currentChunk);
+				}
+			}
+			return result;
+		}
+
+		@Override
+		public int read() throws IOException {
+			return this.doRead(true);
+		}
+
+		@Override
+		public int read(byte[] b) throws IOException {
+			return this.read(b, 0, b.length);
+		}
+
+		@Override
+		public int read(byte[] b, int off, int len) throws IOException {
+			int count = 0;
+			for (int i = 0; i < len; i++) {
+				int x = this.doRead(i == 0); // on block for the first byte
+				if (x < 0) {
+					break;
+				} else {
+					b[off + i] = (byte) x;
+					count++;
+				}
+			}
+			if ((count == 0) && (!this.chunks.hasNext())) {
+				return -1;
+			}
+			return count;
+		}
+
+	}
+
 	private class TestResource extends AbstractResource {
 
+		private final List<?> chunks;
 		private final byte[] data;
+		private final long size;
 		private final AtomicInteger requestCount = new AtomicInteger();
 
-		public TestResource(String name, byte[] data) {
+		public TestResource(String name, List<?> chunks) {
 			super(name);
-			this.data = data;
+			this.chunks = chunks;
+			long size = 0;
+			ByteArrayOutputStream out = new ByteArrayOutputStream();
+			for (Object o: chunks) {
+				if (o instanceof byte[]) {
+					size += ((byte[]) o).length;
+					try {
+						out.write((byte[]) o);
+					} catch (IOException e) {
+						log.error("write failed", e);
+					}
+				}
+			}
+			this.data = out.toByteArray();
+			this.size = size;
+		}
+
+		public TestResource(String name, byte[] data) {
+			this(name, Arrays.asList(data));
 		}
 
 		@Override
 		public long getSize() {
-			return data.length;
+			return size;
 		}
 
 		@Override
 		public InputStream getResourceAsStream() throws IOException {
 			requestCount.incrementAndGet();
-			return new ByteArrayInputStream(this.data);
+
+			return new ChunkedInputStream(this.chunks.iterator());
 		}
 
+		/**
+		 * Called to check the overall data to check against
+		 */
 		public byte[] getData() {
 			return data;
 		}
@@ -99,6 +218,7 @@ public class ResourceLoaderTester {
 
 	private final TestResourceLoader parent;
 	private IResourceLoader resourceLoader;
+	private final LongCountUpLatch positionLatch = new LongCountUpLatch(0);
 
 	public ResourceLoaderTester() {
 		parent = new TestResourceLoader(null, null);
@@ -185,13 +305,23 @@ public class ResourceLoaderTester {
 
 		resource.clearCache();
 
-		byte[] actualData;
+		ByteArrayOutputStream out = new ByteArrayOutputStream();
 		InputStream in = resource.getResourceAsStream();
 		try {
-			actualData = IOUtil.readAllFromStream(in);
+			while (true) {
+				int b = in.read();
+				if (b < 0) {
+					break; // EOF
+				} else {
+					out.write(b);
+					positionLatch.countUp();
+				}
+			}
+//			actualData = IOUtil.readAllFromStream(in);
 		} finally {
 			in.close();
 		}
+		byte[] actualData = out.toByteArray();
 		Assert.assertNotNull("actualData", actualData);
 		assertEquals("actualData", testResource.getData(), actualData);
 
@@ -222,6 +352,7 @@ public class ResourceLoaderTester {
 				} else if (event.isComplete()) {
 					byte[] data = event.getResult();
 					if ((data != null) && (data.length > 0)) {
+						positionLatch.countUp(data.length);
 						try {
 							out.write(data);
 							downloadResult.set(true);
@@ -238,6 +369,7 @@ public class ResourceLoaderTester {
 				} else {
 					byte[] data = event.getResult();
 					if ((data != null) && (data.length > 0)) {
+						positionLatch.countUp(data.length);
 						try {
 							out.write(data);
 						} catch (IOException e) {
@@ -291,8 +423,17 @@ public class ResourceLoaderTester {
 					InputStream in = event.getResult();
 					try {
 						try {
-							byte[] data = IOUtil.readAllFromStream(in);
-							out.write(data);
+							while (true) {
+								int b = in.read();
+								if (b < 0) {
+									break; // EOF
+								} else {
+									out.write(b);
+									positionLatch.countUp();
+								}
+							}
+//							byte[] data = IOUtil.readAllFromStream(in);
+//							out.write(data);
 							downloadResult.set(true);
 						} finally {
 							in.close();
@@ -339,10 +480,32 @@ public class ResourceLoaderTester {
 	}
 
 	public void test(ResourceLoaderTestParameter test, String name) throws IOException {
+		List<?> chunks;
+		if ((!"testResourceBytes".equals(test.getTestName())) &&
+			(!"testResourceAsStream".equals(test.getTestName()))) {
+			ReadCallback callback = new ReadCallback() {
+				@Override
+				public void read(long position) {
+					log.info("await: " + position);
+					try {
+						ResourceLoaderTester.this.positionLatch.await(position);
+					} catch (InterruptedException e) {
+						throw new RuntimeException("await interrupted", e);
+					}
+				}
+			};
+			chunks = Arrays.asList(
+					this.getBinaryData(512 * 1024),
+					callback,
+					this.getBinaryData(512 * 1024));
+		} else {
+			chunks = Arrays.asList(this.getBinaryData(1024 * 1024));
+		}
+		this.positionLatch.reset();
 //		if (this.resourceLoader == null) {
 		this.resourceLoader = this.createResourceLoader(parent);
 //		}
-		TestResource testResource = new TestResource(name, this.getBinaryData(1024 * 1024));
+		TestResource testResource = new TestResource(name, chunks);
 		try {
 			Method method = ResourceLoaderTester.class.getDeclaredMethod(test.getTestName(), new Class<?>[] {
 				String.class, TestResource.class
